@@ -56,8 +56,12 @@ class WifiMonitor:
                 print(datetime.fromtimestamp(int(fn)).isoformat())
                 print("------------------------------------------------------------------")
 
+    # Las fechas se puede no hacer al introducir ultimo leido. 
     def get_in_home_now(self):
-        for d in self.reload_live("2020-02-28", self.ultimo_leido):
+        cambios_estado = []
+        nuevo_estado = []
+        fecha_hoy = datetime.today().strftime('%Y-%m-%d')
+        for d in self.reload_live((fecha_hoy), self.ultimo_leido):
             self.ultimo_leido += 1
             for conocido in self.dispositivos_conocidos:
                if d["mac"] == conocido["mac"]:
@@ -66,26 +70,35 @@ class WifiMonitor:
                         # Si es una fecha posterior a la ultima deteccion registrada
                         if(d["fecha"] > conocido["last_detect"]):
                             conocido["last_detect"] = d["fecha"] # Actualiza ultima deteccion
-                            t_deteccion = int(d["fecha"]) - datetime.now().timestamp()
-                            minutos = t_deteccion/60
-                            # Deteccion mayor que x minutos (True=No esta en casa)
-                            if(int(abs(minutos)) > 20):
-                                if(conocido["home"]): # Estaba en casa
-                                    print("INFO DE CAMBIO: No esta " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"]))))
-                                    conocido["home"] = False
-                                    break
-                            else: # Esta en casa
-                                if(conocido["home"] == False): # No estaba en casa
-                                    print("INFO DE CAMBIO: Esta en casa " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"]))))
-                                    conocido["home"] = True
-                                    break
-                            print("Sigue en casa " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"]))))
+                            if(conocido["home"] == False): # No estaba en casa
+                                #print("INFO DE CAMBIO: Esta en casa " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S')))
+                                conocido["home"] = True
+                                conocido["last_format_date"] = str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S'))
+                                cambios_estado.append(conocido)
+                            #print("SIN CAMBIOS: Esta en casa " + conocido["nombre"] +" " + str(conocido["home"]) + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"]))))
+                            #print("Sigue en casa " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"]))))
                     #Si ya se ha detectado hoy
                     else:
-                        print("INFO DE INICIO: Esta en casa por primera vez hoy: " + conocido["nombre"])
+                        #print("INFO DE INICIO: Esta en casa por primera vez hoy: " + conocido["nombre"])
                         conocido["home"] = True # Estaba en casa
                         conocido["last_detect"] = d["fecha"] # Crea la deteccion
-    
+                        conocido["last_format_date"] = str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S'))
+                        nuevo_estado.append(conocido)
+        return cambios_estado, nuevo_estado
+        
+    def get_out_home_now(self):
+        cambios_estado = []
+        for conocido in self.dispositivos_conocidos:
+            if(conocido["last_detect"] != 0): 
+                t_d = (int(conocido["last_detect"]) - datetime.now().timestamp())/60
+                #print(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+                if(abs(t_d) > 60 and conocido["home"]):
+                    #print("INFO DE CAMBIO: Se ha ido " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S')))
+                    conocido["home"] = False
+                    conocido["last_format_date"] = str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S'))
+                    cambios_estado.append(conocido)
+                #print("Sigue en casa: " + conocido["nombre"])
+        return cambios_estado
 
     # Contador_notificar, crea un contador de los rangos que ha estado en casa
     def comprueba_mac(self) :
@@ -308,6 +321,8 @@ class WifiMonitor:
         self.dispositivos_conocidos.append({"mac":"A8:5C:2C:87:7A:F0", "nombre":"iPhone Jenny", "home":False, "last_detect":0})
         self.dispositivos_conocidos.append({"mac":"88:AE:07:50:DD:E1", "nombre":"iPad Jenny", "home":False, "last_detect":0})
         self.dispositivos_conocidos.append({"mac":"FA:8B:CA:33:62:48", "nombre":"Sotano V Chromecast Casa", "home":False, "last_detect":0})
+        self.dispositivos_conocidos.append({"mac":"A4:38:CC:CE:EF:75", "nombre":"Nintendo Switch", "home":False, "last_detect":0})
+        self.dispositivos_conocidos.append({"mac":"F8:45:1C:E7:B4:C1", "nombre":"PS4", "home":False, "last_detect":0})
 
     def inicializa_datos_desconocidos(self):    
 
@@ -344,7 +359,7 @@ class WifiMonitor:
         self.dispositivos_semiconocidos.append({"mac":"38:4F:F0:3B:4A:B1", "nombre":"PS3-5113391 (AC)"})
         self.dispositivos_semiconocidos.append({"mac":"5C:B1:3E:99:9C:60", "nombre":"Red Oculta (Desconocido)"})
         self.dispositivos_semiconocidos.append({"mac":"0A:12:A5:1B:1B:DD", "nombre":"Direct-nf-FireTV_194c (Desconocido)"})
-
+"""
 monitor = WifiMonitor()
 #monitor.comprueba_mac("CC:FA:00:EB:C9:E0")
 #monitor.get_macs_conocidas()
@@ -352,11 +367,12 @@ monitor = WifiMonitor()
 
 while True:
     monitor.get_in_home_now()
+    monitor.get_out_home_now()
+    print("------------------------------------")
     #print(monitor.dispositivos_conocidos)
-    print(monitor.ultimo_leido)
-    print("-----")
-    time.sleep(10)
-
+    #print(monitor.ultimo_leido)
+    time.sleep(60)
+"""
 """
 #print(monitor.dispositivos_conocidos)
 print("Resumen actual -------------------------------------------")

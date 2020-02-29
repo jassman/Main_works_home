@@ -27,9 +27,7 @@ def getArquitectureInfo():
 def getMemoryInfo():
     mInfo = {} # Informacion de la memoria
     vLin = [] # Lineas de stdout
-
     fr = os.popen("free -m", "r")
-
     # Recorre la salida del comando
     for lin in fr:
         # Quita espacios y separamos por objetos independientes
