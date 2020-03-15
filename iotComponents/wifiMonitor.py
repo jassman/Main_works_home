@@ -4,14 +4,21 @@ import time
 import csv  
 import json  
 from datetime import datetime, timedelta
+import locale
   
 class WifiMonitor:
+    locale.setlocale(locale.LC_ALL, "es_ES.UTF-8")
+
+    MINUTOS_OUT_HOME = 60 # Para notificaciones o eventos de ausencia y estancia
+    MINUTOS_RANGO_WIFI_5 = 75 # Para el registro de rangos
+    MINUTOS_RANGO_WIFI = 30 # Para el registro de rangos
 
     dispositivos_conocidos = [] # Guarda las macs conocidas
     dispositivos_semiconocidos = [] # Guarda las macs semiconocidas
     detectiones = [] # Detecciones agrupadas por rangos
-    contador_notificar = [] 
     ultimo_leido = 0
+    fecha_hoy = 0
+    
 
     # Contine todas las detecciones de macs
     registros = {
@@ -23,112 +30,107 @@ class WifiMonitor:
     def __init__(self):
         self.inicializa_datos_conocidos() # Registro de macs conocidas
         self.inicializa_datos_desconocidos() # Registro de macs semiconocidas
-        ##self.carga_datos("2020-02-24") # Carga de datos del fichero
-        ##self.procesa_datos() # Procesa las detecciones agrupadas por mac y rangos de tiempo
-        #print(self.detectiones)
     
-    def reload(self):
-        self.carga_datos("2020-02-24") # Carga de datos del fichero
-        self.procesa_datos() # Procesa las detecciones agrupadas por mac y rangos de tiempo
+    # Recarga los datos del fichero y los procesa
+    def loadData(self, day):
+        # Limpia datos
+        self.detectiones = []
+        self.registros = {"mac": [], "registro":{},"count":0}
+        # Carga y agrupa datos
+        self.carga_datos(day) 
+        self.procesa_datos() 
 
+        return self.detectiones
+
+    # Recarga los datos del fichero y lee unicamente los nuevos
     def reload_live(self, day, primero):
-        # Open the CSV  
+        # Abrir un CSV
         f = open( '/home/pi/Servidores/datoswifi/datos_' + day + '.csv', 'r' )
-        # Change each fieldname to the appropriate field name. I know, so difficult.  
+        # Lee archivo por columnas
         reader = csv.DictReader( f, fieldnames = ("fecha","mota","mac","rssi","canal"))  
-        # Parse the CSV into JSON  
+        # Parece CSV a json
         data_list = list()
-        x = 0
+        x = 0 # Indice lineas leidas
         for row in reader:
-            if(x > primero):
+            if(x > primero): # Si es una nueva deteccion
                 data_list.append(row)
             x += 1
 
         return json.loads(json.dumps( data_list ) )
 
+    # Devuelve una lista con las detecciones de una mac en concreto
     def get_detections_by_mac(self, mac):
+        detects_mac = []
+        # Compara mac
         for d in self.detectiones:
             if d["mac"].startswith(mac):
-                f = d["fecha_ini"]
-                fn = d["fecha_fin"]
-                print(d)
-                print(datetime.fromtimestamp(int(f)).isoformat())
-                print(datetime.fromtimestamp(int(fn)).isoformat())
-                print("------------------------------------------------------------------")
+                detects_mac.append(d)
+                #print(d)
+                #print(datetime.fromtimestamp(int(d["fecha_ini"])).isoformat())
+                #print(datetime.fromtimestamp(int(d["fecha_fin"])).isoformat())
+                #print("------------------------------------------------------------------")
+        return detects_mac
 
     # Las fechas se puede no hacer al introducir ultimo leido. 
+    # Devuelve los dispositivos detectados
     def get_in_home_now(self):
-        cambios_estado = []
-        nuevo_estado = []
-        fecha_hoy = datetime.today().strftime('%Y-%m-%d')
-        for d in self.reload_live((fecha_hoy), self.ultimo_leido):
-            self.ultimo_leido += 1
+        reconectados = [] # Dispositivos que se han vuelto a conectar
+        nuevos_conectados = [] # Nuevos dispositivos
+        if(self.fecha_hoy != datetime.today().strftime('%Y-%m-%d')):
+            self.fecha_hoy = datetime.today().strftime('%Y-%m-%d')
+            self.ultimo_leido = 0
+        # Compara mac y la ultima hora de deteccion
+        for d in self.reload_live((self.fecha_hoy), self.ultimo_leido):
+            self.ultimo_leido += 1 # lineas leidas
             for conocido in self.dispositivos_conocidos:
-               if d["mac"] == conocido["mac"]:
-                   #Si ya se ha detectado
+                # Si es un dispositivo conocido
+                if d["mac"] == conocido["mac"]:
+                    #Si ya se ha detectado
                     if(conocido["last_detect"] != 0):
                         # Si es una fecha posterior a la ultima deteccion registrada
                         if(d["fecha"] > conocido["last_detect"]):
                             conocido["last_detect"] = d["fecha"] # Actualiza ultima deteccion
-                            if(conocido["home"] == False): # No estaba en casa
+                            # Si no estaba en casa
+                            if(conocido["home"] == False): 
                                 #print("INFO DE CAMBIO: Esta en casa " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S')))
                                 conocido["home"] = True
                                 conocido["last_format_date"] = str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S'))
-                                cambios_estado.append(conocido)
+                                reconectados.append(conocido)
                             #print("SIN CAMBIOS: Esta en casa " + conocido["nombre"] +" " + str(conocido["home"]) + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"]))))
                             #print("Sigue en casa " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"]))))
-                    #Si ya se ha detectado hoy
                     else:
                         #print("INFO DE INICIO: Esta en casa por primera vez hoy: " + conocido["nombre"])
-                        conocido["home"] = True # Estaba en casa
+                        conocido["home"] = True # Esta en casa
                         conocido["last_detect"] = d["fecha"] # Crea la deteccion
                         conocido["last_format_date"] = str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S'))
-                        nuevo_estado.append(conocido)
-        return cambios_estado, nuevo_estado
+                        nuevos_conectados.append(conocido)
         
+        return reconectados, nuevos_conectados
+    
+    # Devuelve una lista con los dispositivos que se han dejado de detectar
     def get_out_home_now(self):
-        cambios_estado = []
+        desconectados = [] # Dispositivos desconectados
+        # Comprueba hora de ultima deteccion
         for conocido in self.dispositivos_conocidos:
             if(conocido["last_detect"] != 0): 
+                # Minutos transcurridos desde la ultima deteccion
                 t_d = (int(conocido["last_detect"]) - datetime.now().timestamp())/60
                 #print(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-                if(abs(t_d) > 60 and conocido["home"]):
+                if(conocido["wifi"] == 5):
+                    tiempo_desconectado = self.MINUTOS_RANGO_WIFI_5
+                else:
+                    tiempo_desconectado = self.MINUTOS_RANGO_WIFI
+                if(abs(t_d) > tiempo_desconectado and conocido["home"]):
                     #print("INFO DE CAMBIO: Se ha ido " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S')))
                     conocido["home"] = False
                     conocido["last_format_date"] = str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S'))
-                    cambios_estado.append(conocido)
+                    desconectados.append(conocido)
                 #print("Sigue en casa: " + conocido["nombre"])
-        return cambios_estado
-
-    # Contador_notificar, crea un contador de los rangos que ha estado en casa
-    def comprueba_mac(self) :
-        for d in self.detectiones:
-            for conocido in self.dispositivos_conocidos:
-                if d["mac"] == conocido["mac"]:
-                    coincide = None
-                    for i in range(len(self.contador_notificar)):
-                        if self.contador_notificar[i]["mac"] == d["mac"]:
-                            coincide = True
-                            self.contador_notificar[i]["contador"] += 1
-                            break
-                    if coincide == None:    
-                        self.contador_notificar.append({"mac":d["mac"], "contador":1})
-        print(self.contador_notificar)
-
-    def get_macs_conocidas(self):
-        for dispositivo in self.detectiones:
-            if dispositivo["nombre"] != "Desconocido":
-                f = dispositivo["fecha_ini"]
-                fn = dispositivo["fecha_fin"]
-                print(dispositivo)
-                print(datetime.fromtimestamp(int(f)).isoformat())
-                print(datetime.fromtimestamp(int(fn)).isoformat())
-                print("------------------------------------------------------------------")
+        return desconectados
 
     def procesa_datos(self):
-        
         nConocidos = 0 # Numero de dispositivos conocidos
-
+        # Lee los registros
         for dispositivo in self.registros["registro"]:
             # Creacion del objeto (Puede crearse fuera con copia)
             registros_format = {
@@ -141,7 +143,8 @@ class WifiMonitor:
                 "rssi_max": {},
                 "canal": {}, 
                 "ncanales": {}, 
-                "repeticiones":0
+                "repeticiones":0,
+                "conocido": 2
             }
             #############################################################################
             # ASIGNACION DE NOMBRE Y MAC
@@ -151,16 +154,16 @@ class WifiMonitor:
             for dc in self.dispositivos_conocidos:
                 if(dispositivo == dc["mac"]):
                     registros_format["nombre"] = dc["nombre"]
+                    registros_format["conocido"] = 0
+                    #registros_format["wifi"] = dc["wifi"]
                     nConocidos += 1
                     break
             for dc in self.dispositivos_semiconocidos:
                 if(dispositivo == dc["mac"]):
                     registros_format["nombre"] = dc["nombre"]
+                    registros_format["conocido"] = 1
                     nConocidos += 1
                     break
-            # Si no ha encontrado ningun nombre se le asigna uno
-            #if(registros_format["nombre"] == ""):
-            #    registros_format["nombre"] = "Desconocido"
 
             #############################################################################
             # ASIGNACION DE FECHAS Y RSSI
@@ -198,8 +201,13 @@ class WifiMonitor:
                         fecha_anterior = fecha_actual
                     # Si no es la primera deteccion comparamos las fechas de las detecciones
                     else:
+                        # Se trata diferente a los wifis de 2 y 5 Ghz
+                        if(self.registros["registro"][dispositivo]["wifi"] == 5):
+                            tiempo_desconectado = self.MINUTOS_RANGO_WIFI_5
+                        else:
+                            tiempo_desconectado = self.MINUTOS_RANGO_WIFI
                         # Si es mayor de un tiempo determinado separamos en un rango
-                        if abs(fecha_anterior - fecha_actual) > timedelta(minutes=30):
+                        if abs(fecha_anterior - fecha_actual) > timedelta(minutes=tiempo_desconectado):
                             registros_format["fecha_ini"] = int(datetime.timestamp(rango_inicio))
                             registros_format["fecha_fin"] = int(datetime.timestamp(rango_final))
                             registros_format["rssi_max"] = max(rssi_rango)
@@ -209,6 +217,7 @@ class WifiMonitor:
                             registros_format["ncanales"] = len(set(self.registros["registro"][dispositivo]["canal"]))
                             nombre = registros_format["nombre"]
                             mac = registros_format["mac"]
+                            conocido = registros_format["conocido"]
                             ultima_detect = True
                             self.detectiones.append(registros_format.copy())
                             registros_format.clear()
@@ -222,7 +231,8 @@ class WifiMonitor:
                                 "rssi_max": {},
                                 "canal": {}, 
                                 "ncanales": {}, 
-                                "repeticiones":0
+                                "repeticiones":0,
+                                "conocido": conocido
                             }
                             rssi_rango.clear()
                             rango_inicio = 0
@@ -270,19 +280,35 @@ class WifiMonitor:
                 if(rango_final == 0):
                     registros_format["fecha_fin"] = datetime.fromtimestamp(int(f))
             
+
+            # Es la unica deteccion? Formatea el entero de la lista
+            """ if(len(registros_format["rssi"]) == 1):
+                registros_format["rssi"] = int(registros_format["rssi"][0])"""
+
+            if(isinstance(registros_format["rssi"], list)):
+                registros_format["rssi"] = int(registros_format["rssi"][0])
+
+            if(isinstance(registros_format["rssi_max"], list)):
+                registros_format["rssi_max"] = int(registros_format["rssi_max"][0])
+
+            if(isinstance(registros_format["rssi_min"], list)):
+                registros_format["rssi_min"] = int(registros_format["rssi_min"][0])
+
             # Ultimo rango de resgistro desoues de otros rangos
             if(ultima_detect == False):
                 self.detectiones.append(registros_format.copy())
                 rssi_rango.clear()
     
+    # Carga los datos a una estructura
     def carga_datos(self, day):
-        # Open the CSV  
+        # Abre un csv
         f = open( '/home/pi/Servidores/datoswifi/datos_' + day + '.csv', 'r' )
-        # Change each fieldname to the appropriate field name. I know, so difficult.  
+        # Carga los datos 
         reader = csv.DictReader( f, fieldnames = ("fecha","mota","mac","rssi","canal"))  
-        # Parse the CSV into JSON  
+        # Parsea CSV a JSON  
         out = json.dumps( [ row for row in reader ] )  
-        print ("JSON parsed!")
+        # print ("JSON parsed!")
+        # Por cada linea de fichero
         for detect in json.loads(out):
             # Si todavia no se ha detectado se crea el registro
             if(detect["mac"] not in self.registros["mac"]):
@@ -304,28 +330,31 @@ class WifiMonitor:
                 self.registros["registro"][detect["mac"]]["canal"].append(detect["canal"])
                 self.registros["registro"][detect["mac"]]["repeticiones"] += 1
 
+    ##
+    # Futura unicializacion desde la bbdd
+    ##
     def inicializa_datos_conocidos(self):
-        self.dispositivos_conocidos.append({"mac":"08:12:A5:1B:9B:DD", "nombre":"Fire Stick Casa", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"CC:FA:00:EB:C9:E0", "nombre":"Nexus 5 Jas", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"04:B4:29:6D:56:A1", "nombre":"Galaxy A40 Jas", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"B8:27:EB:50:54:28", "nombre":"Raspberry", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"34:95:6C:0E:B2:2D", "nombre":"LG OLED SALON", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"54:99:63:70:C1:23", "nombre":"iPad Mami", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"00:50:B6:BE:FB:CA", "nombre":"Generico (Por saber)", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"BB:86:87:C4:B8:67", "nombre":"Generico (Por saber)", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"70:28:8B:56:BD:8A", "nombre":"Samsung J7 Mami", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"04:B4:29:0D:DD:F3", "nombre":"Samsung M30s Papi", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"E0:37:17:AD:9E:A4", "nombre":"Agile TV", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"BC:EC:23:C3:15:D8", "nombre":"PC sobremesa Jas", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"5C:B1:3E:99:9C:60", "nombre":"Mi wifi", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"A8:5C:2C:87:7A:F0", "nombre":"iPhone Jenny", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"88:AE:07:50:DD:E1", "nombre":"iPad Jenny", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"FA:8B:CA:33:62:48", "nombre":"Sotano V Chromecast Casa", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"A4:38:CC:CE:EF:75", "nombre":"Nintendo Switch", "home":False, "last_detect":0})
-        self.dispositivos_conocidos.append({"mac":"F8:45:1C:E7:B4:C1", "nombre":"PS4", "home":False, "last_detect":0})
+        self.dispositivos_conocidos.append({"mac":"08:12:A5:1B:9B:DD", "nombre":"Fire Stick Casa", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"CC:FA:00:EB:C9:E0", "nombre":"Nexus 5 Jas", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"04:B4:29:6D:56:A1", "nombre":"Galaxy A40 Jas", "home":False, "last_detect":0, "wifi":5})
+        self.dispositivos_conocidos.append({"mac":"B8:27:EB:50:54:28", "nombre":"Raspberry", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"34:95:6C:0E:B2:2D", "nombre":"LG OLED SALON", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"54:99:63:70:C1:23", "nombre":"iPad Mami", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"00:50:B6:BE:FB:CA", "nombre":"Generico (Por saber)", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"BB:86:87:C4:B8:67", "nombre":"Generico (Por saber)", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"70:28:8B:56:BD:8A", "nombre":"Samsung J7 Mami", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"04:B4:29:0D:DD:F3", "nombre":"Samsung M30s Papi", "home":False, "last_detect":0, "wifi":5})
+        self.dispositivos_conocidos.append({"mac":"E0:37:17:AD:9E:A4", "nombre":"Agile TV", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"BC:EC:23:C3:15:D8", "nombre":"PC sobremesa Jas", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"5C:B1:3E:99:9C:60", "nombre":"Mi wifi", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"A8:5C:2C:87:7A:F0", "nombre":"iPhone Jenny", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"88:AE:07:50:DD:E1", "nombre":"iPad Jenny", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"FA:8B:CA:33:62:48", "nombre":"Sotano V Chromecast Casa", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"A4:38:CC:CE:EF:75", "nombre":"Nintendo Switch", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"F8:45:1C:E7:B4:C1", "nombre":"PS4", "home":False, "last_detect":0, "wifi":2})
+        self.dispositivos_conocidos.append({"mac":"D0:7E:35:44:F1:2E", "nombre":"Portatil Jas", "home":False, "last_detect":0, "wifi":5})
 
     def inicializa_datos_desconocidos(self):    
-
 
         self.dispositivos_semiconocidos.append({"mac":"78:8A:20:E6:AB:3D", "nombre":"Colina40 (AC)"})
         self.dispositivos_semiconocidos.append({"mac":"D8:FB:5E:0B:58:E3", "nombre":"PepePlus (AC)"})
