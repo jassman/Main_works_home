@@ -10,6 +10,7 @@ class WifiMonitor:
     locale.setlocale(locale.LC_ALL, "es_ES.UTF-8")
 
     MINUTOS_OUT_HOME = 60 # Para notificaciones o eventos de ausencia y estancia
+    MINUTOS_OUT_HOME_5 = 90 # Para notificaciones o eventos de ausencia y estancia
     MINUTOS_RANGO_WIFI_5 = 75 # Para el registro de rangos
     MINUTOS_RANGO_WIFI = 30 # Para el registro de rangos
 
@@ -112,14 +113,14 @@ class WifiMonitor:
         desconectados = [] # Dispositivos desconectados
         # Comprueba hora de ultima deteccion
         for conocido in self.dispositivos_conocidos:
-            if(conocido["last_detect"] != 0): 
+            if(conocido["last_detect"] != 0):  
                 # Minutos transcurridos desde la ultima deteccion
                 t_d = (int(conocido["last_detect"]) - datetime.now().timestamp())/60
                 #print(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
                 if(conocido["wifi"] == 5):
-                    tiempo_desconectado = self.MINUTOS_RANGO_WIFI_5
+                    tiempo_desconectado = self.MINUTOS_OUT_HOME_5
                 else:
-                    tiempo_desconectado = self.MINUTOS_RANGO_WIFI
+                    tiempo_desconectado = self.MINUTOS_OUT_HOME
                 if(abs(t_d) > tiempo_desconectado and conocido["home"]):
                     #print("INFO DE CAMBIO: Se ha ido " + conocido["nombre"] + " con fecha: " + str(datetime.fromtimestamp(int(conocido["last_detect"])).strftime('%H:%M:%S')))
                     conocido["home"] = False
@@ -201,16 +202,20 @@ class WifiMonitor:
                         fecha_anterior = fecha_actual
                     # Si no es la primera deteccion comparamos las fechas de las detecciones
                     else:
-                        # Se trata diferente a los wifis de 2 y 5 Ghz
-                        if(self.registros["registro"][dispositivo]["wifi"] == 5):
-                            tiempo_desconectado = self.MINUTOS_RANGO_WIFI_5
-                        else:
-                            tiempo_desconectado = self.MINUTOS_RANGO_WIFI
+                        tiempo_desconectado = self.MINUTOS_RANGO_WIFI
+                        # Se guarda en rangos diferentes a los wifis de 2 y 5 Ghz
+                        for conocido in self.dispositivos_conocidos:
+                            if(conocido["mac"] == dispositivo):  
+                                if(conocido["wifi"] == 5):
+                                    tiempo_desconectado = self.MINUTOS_RANGO_WIFI_5
+                                else:
+                                    tiempo_desconectado = self.MINUTOS_RANGO_WIFI
+                                break
                         # Si es mayor de un tiempo determinado separamos en un rango
                         if abs(fecha_anterior - fecha_actual) > timedelta(minutes=tiempo_desconectado):
                             registros_format["fecha_ini"] = int(datetime.timestamp(rango_inicio))
                             registros_format["fecha_fin"] = int(datetime.timestamp(rango_final))
-                            registros_format["rssi_max"] = max(rssi_rango)
+                            registros_format["rssi_max"] = max(rssi_rango) 
                             registros_format["rssi_min"] = min(rssi_rango)
                             registros_format["rssi"] = round(sum(list(map(int, rssi_rango)))/len(rssi_rango))
                             registros_format["canal"] = self.registros["registro"][dispositivo]["canal"][0]

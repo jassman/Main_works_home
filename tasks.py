@@ -53,12 +53,13 @@ def rutinaComprobarDispositivosWifi():
         for d in han_vuelto :
             mensaje = mensaje + d["nombre"] + ": " +  d["last_format_date"] + " "
         mensaje += "\n"
+    """
     if(len(se_han_ido) > 0): # Si se ha dejado de detectar algun dispositivo
         mensaje += "Se ha dejado de detectar: "
         for d in se_han_ido :
             mensaje = mensaje + d["nombre"] + ": " +  d["last_format_date"] + " "
         mensaje += "\n"
-
+    """
     return mensaje
 ##############################################################################################
 
