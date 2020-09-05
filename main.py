@@ -16,7 +16,7 @@ locale.setlocale(locale.LC_ALL, "es_ES.UTF-8")
 # RUTINAS
 TEMPERATURA_HUMEDAD = True # Registro de la temperatura y humedad del sensor
 CHECK_WIFI = False # Debe esta el servicio de detecciones encendido!!!! 
-REGISTRO_RANGOS_WIFI = False # Registro de rangos wifi en el servidor
+REGISTRO_RANGOS_WIFI = True # Registro de rangos wifi en el servidor
 
 # TIEMPOS RUTINAS (segundos)
 TEMPERATURA_HUMEDAD_TIME = 3600
@@ -45,6 +45,7 @@ def wrapperAreUInHome():
     while True :
         mensaje = tasks.rutinaComprobarDispositivosWifi()
         if(mensaje != ""):
+            print("RUTINAS " + token_fcm)
             fcm.push_notification('IA HOME', mensaje, token_fcm)
         time.sleep(60)
 
@@ -67,7 +68,7 @@ if (TEMPERATURA_HUMEDAD) :
     hilo_humedad_temperatura = threading.Thread(target=wrapperHumedadTemperatura)
     hilo_humedad_temperatura.start()
 
-# EVENTOS DETECCIONES WIFI
+# EVENTOS DETECCIONES WIFI (NOTIFICACIONES)
 if (CHECK_WIFI) :
     hilo_wifi_check = threading.Thread(target=wrapperAreUInHome)
     hilo_wifi_check.start()

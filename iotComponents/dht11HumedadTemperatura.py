@@ -33,7 +33,7 @@ def readDHTHumedad():
     # Reading the DHT11 is very sensitive to timings and occasionally
     # the Pi might fail to get a valid reading. So check if readings are valid.
     if humidity is not None and temperature is not None:
-        json_response = {"temperatura": temperature, "humedad": humidity}
+        json_response = {"temperatura": temperature, "humedad": humidity, "habitacion": 1}
         return json_response
     else:
         print('Failed to get reading. Try again!')

@@ -68,15 +68,13 @@ def rutinaGuardarDatosWifi(fecha):
     detecciones = monitor.loadData(fecha)
     conocidos = []
     for d in detecciones:
-        if(d["conocido"] == 0 or d["conocido"] == 1):
+        #if(d["conocido"] == 0 or d["conocido"] == 1):
+        if(d["conocido"] == 0):
             conocidos.append(d)
     #print(conocidos)
     respuesta = apiRest.postIotWifiRangos(conocidos)
     print(respuesta.text)
 ##############################################################################################
-
-
-
 
 
 
