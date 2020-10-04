@@ -50,7 +50,7 @@ def getParticulasAire(apiRest):
 
             json_response = {}
             if vals[1] is not None and vals[2] is not None and myaqi is not None:
-                json_request = {"fecha": int(datetime.now().timestamp()), "aqi": int(myaqi), "pm25": pm25, "pm10": pm10}
+                json_request = {"fecha": int(datetime.now().timestamp()), "aqi": int(myaqi), "pm25": vals[1], "pm10": vals[2]}
                 respuesta = apiRest.postParticularAire(json_request)
                 print('novaPMSensor::getParticulasAire:: Llamada a apiRest.postParticularAire', respuesta)
             else:
