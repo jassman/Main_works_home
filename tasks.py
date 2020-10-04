@@ -3,9 +3,11 @@ import json
 from restApiProvider import RestApiProviderClass
 import systemTasks
 import apiTasks
-import iotComponents.dht11HumedadTemperatura as dht
 
+import iotComponents.dht11HumedadTemperatura as dht
 import iotComponents.wifiMonitor
+import iotComponents.novaPMsensor as nova
+
 
 apiRest = RestApiProviderClass()
 monitor = iotComponents.wifiMonitor.WifiMonitor()
@@ -19,7 +21,7 @@ def rutinaMemoria():
     api_memoria = apiTasks.formatMemoriaSistema(json.loads(memoria))
     ## Regitro de memoria
     respuesta = apiRest.postMemoriaSistema(api_memoria)
-    print (respuesta)
+    print('tasks::rutinaMemoria::apiRest.postMemoriaSistema', respuesta)
 ##############################################################################################
 
 ### REGISTRO ARQUITECTURA SISTEMA ############################################################
@@ -27,7 +29,7 @@ def rutinaUnicaArquitectureInfo():
     arqInfo = systemTasks.getArquitectureInfo()
     arqInfo = apiTasks.formatArquitectureSistema(arqInfo)
     respuesta = apiRest.postArquitectura(arqInfo)
-    print(respuesta)
+    print('tasks::rutinaUnicaArquitectureInfo::apiRest.postArquitectura', respuesta)
 ##############################################################################################
 
 ### REGISTRO TEMPERATURA Y HUMEDAD ###########################################################
@@ -35,7 +37,16 @@ def rutinaHumedadTemperatura():
     infoHumedad = dht.readDHTHumedad()
     if (infoHumedad != False):
         respuesta = apiRest.postIotHumedadTemperatura(infoHumedad)
-        print(respuesta)
+        print('tasks::rutinaHumedadTemperatura::apiRest.postIotHumedadTemperatura', respuesta)
+##############################################################################################
+
+### REGISTRO PARTICULAR AIRE #################################################################
+def rutinaParticulasAire():
+    # infoParticulas = nova.getParticulasAire()
+    # if (infoParticulas != False):
+    #     respuesta = apiRest.postParticularAire(infoParticulas)
+    #     print(respuesta)
+    nova.getParticulasAire(apiRest)
 ##############################################################################################
 
 ### COMPROBAR PERSONAS EN CASA WIFI ##########################################################
@@ -73,7 +84,7 @@ def rutinaGuardarDatosWifi(fecha):
             conocidos.append(d)
     #print(conocidos)
     respuesta = apiRest.postIotWifiRangos(conocidos)
-    print(respuesta.text)
+    print('tasks::rutinaGuardarDatosWifi::apiRest.postIotWifiRangos', respuesta.text)
 ##############################################################################################
 
 

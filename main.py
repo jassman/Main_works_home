@@ -15,12 +15,14 @@ locale.setlocale(locale.LC_ALL, "es_ES.UTF-8")
 
 # RUTINAS
 TEMPERATURA_HUMEDAD = True # Registro de la temperatura y humedad del sensor
-CHECK_WIFI = False # Debe esta el servicio de detecciones encendido!!!! 
+CHECK_WIFI = False # Debe esta el servicio de detecciones encendido!!!! Para las notificaciones a la app movil
 REGISTRO_RANGOS_WIFI = True # Registro de rangos wifi en el servidor
+REGISTRO_PARTICULAS_AIRE = True # Registro de particulas de aire en el servidor
 
 # TIEMPOS RUTINAS (segundos)
-TEMPERATURA_HUMEDAD_TIME = 3600
-CHECK_WIFI_TIME = 60
+TEMPERATURA_HUMEDAD_TIME = 3600 # 1 hora
+PARTICULAS_AIRE_TIME = 600 # 10 minutos
+CHECK_WIFI_TIME = 60 # 1 minuto
 
 ### TOKEN Y NOTIFICACIONES
 token_fcm = fcm.getTokenFCM()
@@ -36,7 +38,15 @@ token_fcm = fcm.getTokenFCM()
 def wrapperHumedadTemperatura():
     while True :
         tasks.rutinaHumedadTemperatura()
-        time.sleep(3600)
+        time.sleep(TEMPERATURA_HUMEDAD_TIME)
+
+####################### PARTICULAS AIRE ###########################
+# Comprueba las particulas suspendidas en el aire y las guarda
+def wrapperParticulasAire():
+    tasks.rutinaParticulasAire()
+    # while True :
+    #     tasks.rutinaParticulasAire()
+    #     time.sleep(PARTICULAS_AIRE_TIME)
 
 ####################### DETECCIONES WIFI ##########################
 # Eventos de detecciones wifi
@@ -47,7 +57,7 @@ def wrapperAreUInHome():
         if(mensaje != ""):
             print("RUTINAS " + token_fcm)
             fcm.push_notification('IA HOME', mensaje, token_fcm)
-        time.sleep(60)
+        time.sleep(CHECK_WIFI_TIME)
 
 ############### REGISTRO DIARIO DE DETECCIONES WIFI ################
 # Comprueba la humedad y la temperatura actual y la guarda
@@ -67,6 +77,12 @@ def wrapperGuardaDatosWifi():
 if (TEMPERATURA_HUMEDAD) :
     hilo_humedad_temperatura = threading.Thread(target=wrapperHumedadTemperatura)
     hilo_humedad_temperatura.start()
+
+# TEMPERATURA Y HUMEDAD 
+if (REGISTRO_PARTICULAS_AIRE) :
+    hilo_particulas_aire = threading.Thread(target=wrapperParticulasAire)
+    hilo_particulas_aire.start()
+
 
 # EVENTOS DETECCIONES WIFI (NOTIFICACIONES)
 if (CHECK_WIFI) :
